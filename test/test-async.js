@@ -3846,6 +3846,154 @@ exports['priorityQueue'] = {
 };
 
 
+exports['topicalQueue'] = {
+
+    'topicalQueue': function (test) {
+        test.expect(11);
+        var call_order = [];
+
+        var q = async.topicalQueue(function (task, callback) {
+            call_order.push('process ' + task);
+            async.setImmediate(function () { callback('error', 'arg'); });
+        }, 1);
+
+        q.drain = function () {
+            test.same(call_order, [
+                'process apple', 'callback 1',
+                'process carrot', 'callback 4',
+                'process orange', 'callback 2',
+                'process pear', 'callback 3'
+            ]);
+            test.equal(q.concurrency, 1);
+            test.equal(q.length(), 0);
+            test.done();
+        };
+
+        q.push('apple', 'fruit', function (err, arg) {
+            test.equal(err, 'error');
+            test.equal(arg, 'arg');
+            call_order.push('callback ' + 1);
+
+            q.pause('fruit');
+
+            q.push('orange', 'fruit', function (err, arg) {
+                test.equal(err, 'error');
+                test.equal(arg, 'arg');
+                call_order.push('callback ' + 2);
+            });
+
+            q.push('pear', 'fruit', function (err, arg) {
+                test.equal(err, 'error');
+                test.equal(arg, 'arg');
+                call_order.push('callback ' + 3);
+            });
+
+            q.push('carrot', 'vegetable', function (err, arg) {
+                test.equal(err, 'error');
+                test.equal(arg, 'arg');
+                call_order.push('callback ' + 4);
+                q.resume('fruit');
+            });
+        });
+
+    },
+
+    'concurrency': function (test) {
+
+        test.expect(1);
+        var call_order = [];
+        var q = async.topicalQueue(function (task, callback) {
+            if (task.isLongRunning) {
+                q.pause(task.topic);
+                setTimeout(function () {
+                    call_order.push('long ' + task.id);
+                    q.resume(task.topic);
+                    callback();
+                }, 500);
+            }
+            else {
+                call_order.push(task.id);
+                callback();
+            }
+        }, 10);
+
+        q.drain = function () {
+            test.same(call_order, ['long v1', 'v2', 'v3', 'v4', 'v5', 'long f1', 'f2', 'f3', 'f4', 'f5']);
+            test.done();
+        };
+
+        q.pause('fruit');
+        q.push({ id: 'f1', topic: 'fruit', isLongRunning: true}, 'fruit');
+        q.push({ id: 'f2' }, 'fruit');
+        q.push({ id: 'f3' }, 'fruit');
+        q.push({ id: 'f4' }, 'fruit');
+        q.push({ id: 'f5' }, 'fruit');
+        q.push({ id: 'v1', topic: 'vegetables', isLongRunning: true}, 'vegetables');
+        q.push({ id: 'v2' }, 'vegetables');
+        q.push({ id: 'v3' }, 'vegetables');
+        q.push({ id: 'v4' }, 'vegetables');
+        q.push({ id: 'v5' }, 'vegetables', function () {q.resume('fruit');});
+
+    },
+
+    'resumeAll': function (test) {
+        test.expect(11);
+        var call_order = [];
+
+        var q = async.topicalQueue(function (task, callback) {
+            call_order.push('process ' + task);
+            async.setImmediate(function () { callback('error', 'arg'); });
+        }, 1);
+
+        q.drain = function () {
+            test.same(call_order, [
+                'resumeAll',
+                'process apple', 'callback 1',
+                'process orange', 'callback 2',
+                'process carrot', 'callback 3',
+                'process pear', 'callback 4'
+            ]);
+            test.equal(q.concurrency, 1);
+            test.equal(q.length(), 0);
+            test.done();
+        };
+
+        q.pause('fruit');
+        q.pause('vegetable');
+
+        q.push('apple', 'fruit', function (err, arg) {
+            test.equal(err, 'error');
+            test.equal(arg, 'arg');
+            call_order.push('callback ' + 1);
+        });
+
+        q.push('orange', 'fruit', function (err, arg) {
+            test.equal(err, 'error');
+            test.equal(arg, 'arg');
+            call_order.push('callback ' + 2);
+        });
+
+        q.push('carrot', 'vegetable', function (err, arg) {
+            test.equal(err, 'error');
+            test.equal(arg, 'arg');
+            call_order.push('callback ' + 3);
+        });
+
+        q.push('pear', 'fruit', function (err, arg) {
+            test.equal(err, 'error');
+            test.equal(arg, 'arg');
+            call_order.push('callback ' + 4);
+        });
+
+        setTimeout(function () {
+            call_order.push('resumeAll');
+            q.resumeAll();
+        }, 100);
+    }
+
+};
+
+
 exports['cargo'] = {
 
     'cargo': function (test) {
